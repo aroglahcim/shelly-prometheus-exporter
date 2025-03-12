@@ -1,0 +1,19 @@
+services:
+  shelly-prometheus-exporter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: shelly-prometheus-exporter:latest
+    container_name: shelly-prometheus-exporter
+    restart: unless-stopped
+    ports:
+      - ${SHELLY_PROMETHEUS_EXPORTER_PORT:-8000}:${SHELLY_PROMETHEUS_EXPORTER_PORT:-8000}
+    environment:
+      - SHELLY_PROMETHEUS_EXPORTER_PORT=${SHELLY_PROMETHEUS_EXPORTER_PORT:-8000}
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${SHELLY_PROMETHEUS_EXPORTER_PORT:-8000}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

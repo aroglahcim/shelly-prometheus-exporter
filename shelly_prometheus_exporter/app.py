@@ -6,14 +6,12 @@ from typing import List
 import asyncio
 from .metrics import fetch_device_metrics
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# Create FastAPI app instance
 app = FastAPI(
     title="Shelly Prometheus Exporter",
     description="A Prometheus exporter for Shelly devices",
