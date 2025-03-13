@@ -2,6 +2,7 @@
 
 ```yaml
 services:
+  shelly-prometheus-exporter:
     image: aroglahcim/shelly-prometheus-exporter
     container_name: shelly-prometheus-exporter
     restart: unless-stopped
