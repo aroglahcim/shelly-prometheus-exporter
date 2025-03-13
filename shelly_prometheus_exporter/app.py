@@ -45,16 +45,13 @@ async def get_metrics(target: List[str] = Query(None, alias="target[]")):
     
     logger.info(f"Fetching metrics from targets: {target}")
     
-    # Normalize all target URLs
     target_urls = [normalize_target_url(t) for t in target]
     
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            # Fetch metrics from all targets concurrently
             tasks = [fetch_device_metrics(client, url) for url in target_urls]
             results = await asyncio.gather(*tasks)
             
-            # Combine all metrics
             return "\n".join(results)
             
     except Exception as e:

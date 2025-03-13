@@ -70,10 +70,8 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
     metrics = []
     hostname = urlparse(target).hostname or target
     
-    # Extract device info
     device_info = extract_device_info(settings)
     
-    # Add device info metric with all labels
     create_metric(
         metrics,
         'shelly_device_info',
@@ -89,7 +87,6 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
         1
     )
     
-    # Process wifi_sta if available
     if 'wifi_sta' in status:
         wifi = status['wifi_sta']
         create_metric(
@@ -110,7 +107,6 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
             1 if wifi.get('connected', False) else 0
         )
     
-    # Process cloud connection status
     if 'cloud' in status:
         cloud = status['cloud']
         create_metric(
@@ -131,7 +127,6 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
             1 if cloud.get('enabled', False) else 0
         )
     
-    # Process MQTT connection status
     if 'mqtt' in status:
         mqtt = status['mqtt']
         create_metric(
@@ -143,7 +138,6 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
             1 if mqtt.get('connected', False) else 0
         )
     
-    # Process update information
     if 'has_update' in status:
         create_metric(
             metrics,
@@ -170,7 +164,6 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
             1
         )
     
-    # Process RAM metrics
     if 'ram_total' in status and 'ram_free' in status:
         create_metrics(
             metrics,
@@ -184,7 +177,6 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
             ]
         )
     
-    # Process filesystem metrics
     if 'fs_size' in status and 'fs_free' in status:
         create_metrics(
             metrics,
@@ -198,7 +190,6 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
             ]
         )
     
-    # Process temperature if available
     if 'temperature' in status:
         temp_c = status["temperature"]
         temp_k = temp_c + 273.15
@@ -221,7 +212,6 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
             temp_k
         )
     
-    # Process uptime
     if 'uptime' in status:
         create_metric(
             metrics,
@@ -232,7 +222,6 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
             status['uptime']
         )
     
-    # Process relays if available
     if 'relays' in status:
         create_metrics(
             metrics,
@@ -243,11 +232,8 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
              for idx, relay in enumerate(status['relays'])]
         )
     
-    # Process meters if available
     if 'meters' in status:
-        # Process each meter's metrics
         for idx, meter in enumerate(status['meters']):
-            # Basic power and energy metrics
             if 'power' in meter:
                 create_metric(
                     metrics,
@@ -280,7 +266,6 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
                     total_watthours
                 )
             
-            # Overpower value if present
             if 'overpower' in meter:
                 create_metric(
                     metrics,
@@ -291,7 +276,6 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
                     meter['overpower']
                 )
             
-            # Meter validity
             if 'is_valid' in meter:
                 create_metric(
                     metrics,
@@ -302,7 +286,6 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
                     1 if meter['is_valid'] else 0
                 )
             
-            # Timestamp if present
             if 'timestamp' in meter:
                 create_metric(
                     metrics,
@@ -313,7 +296,6 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
                     meter['timestamp']
                 )
             
-            # Last minute energy counters (in both watt-minutes and calculated watt-hours)
             if 'counters' in meter and isinstance(meter['counters'], list):
                 create_metrics(
                     metrics,
@@ -333,7 +315,6 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
                      for minute, value in enumerate(meter['counters'])]
                 )
     
-    # Add max power if available
     if 'max_power' in settings:
         create_metric(
             metrics,
@@ -349,12 +330,10 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
 async def fetch_device_metrics(client: httpx.AsyncClient, target_url: str) -> str:
     """Fetch metrics from a single Shelly device."""
     try:
-        # First, get device settings
         settings_response = await client.get(f"{target_url}/settings")
         settings_response.raise_for_status()
         settings_data = settings_response.json()
         
-        # Get device status
         status_response = await client.get(f"{target_url}/status")
         status_response.raise_for_status()
         status_data = status_response.json()
