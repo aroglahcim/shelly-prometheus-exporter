@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     
     PORT: int = Field(default=8000, description="Port to run the server on")
     DEV_RELOAD: bool = Field(default=False, description="Enable auto-reload for development")
+    METRIC_PREFIX: str = Field(default="", description="Prefix to add to all metric names")
     
     model_config = SettingsConfigDict(
         env_prefix="SHELLY_PROMETHEUS_EXPORTER_",

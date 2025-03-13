@@ -1,5 +1,5 @@
 import uvicorn
-from .settings import get_settings
+from shelly_prometheus_exporter.settings import get_settings
 
 def main():
     """Run the application using Uvicorn."""

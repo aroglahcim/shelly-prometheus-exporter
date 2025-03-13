@@ -4,7 +4,7 @@ import httpx
 import logging
 from typing import List
 import asyncio
-from .metrics import fetch_device_metrics
+from shelly_prometheus_exporter.metrics import fetch_device_metrics
 
 logging.basicConfig(
     level=logging.INFO,

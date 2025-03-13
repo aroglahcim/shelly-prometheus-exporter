@@ -1,5 +1,4 @@
-from typing import Set, Dict, Any
-from fastapi import HTTPException
+from typing import Dict, Any
 
 def extract_device_info(settings: Dict[str, Any]) -> Dict[str, str]:
     """

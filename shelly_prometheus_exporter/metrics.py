@@ -1,10 +1,69 @@
 import httpx
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List, Union, Iterable
 from urllib.parse import urlparse
-from .devices import extract_device_info
+
+from shelly_prometheus_exporter.settings import get_settings
+from shelly_prometheus_exporter.devices import extract_device_info
 
 logger = logging.getLogger(__name__)
+
+def create_metric_line(name: str, labels: Dict[str, str], value: Union[int, float, bool]) -> str:
+    """Create a single metric line with labels in Prometheus format.
+    
+    Args:
+        name: Name of the metric
+        labels: Dictionary of label names and values
+        value: The metric value
+    """
+    settings = get_settings()
+    labels_str = ','.join(f'{k}="{v}"' for k, v in sorted(labels.items()))
+    return f'{settings.METRIC_PREFIX}{name}{{{labels_str}}} {value}'
+
+def create_metric(
+    metrics: List[str],
+    name: str,
+    help_text: str,
+    metric_type: str,
+    labels: Dict[str, str],
+    value: Union[int, float, bool]
+) -> None:
+    """Helper function to create a single Prometheus metric with help and type information.
+    
+    Args:
+        metrics: List to append the metric lines to
+        name: Name of the metric
+        help_text: Help text describing the metric
+        metric_type: Type of metric (gauge, counter, etc.)
+        labels: Dictionary of labels for the metric
+        value: The metric value
+    """
+    metrics.append(f'# HELP {name} {help_text}')
+    metrics.append(f'# TYPE {name} {metric_type}')
+    labels_normalized = {k: str(v) for k, v in labels.items()}
+    metrics.append(create_metric_line(name, labels_normalized, value))
+
+def create_metrics(
+    metrics: List[str],
+    name: str,
+    help_text: str,
+    metric_type: str,
+    labels_and_values: Iterable[tuple[Dict[str, str], Union[int, float, bool]]]
+) -> None:
+    """Helper function to create multiple Prometheus metrics of the same type.
+    
+    Args:
+        metrics: List to append the metric lines to
+        name: Name of the metric
+        help_text: Help text describing the metric
+        metric_type: Type of metric (gauge, counter, etc.)
+        labels_and_values: Iterable of (labels, value) tuples
+    """
+    metrics.append(f'# HELP {name} {help_text}')
+    metrics.append(f'# TYPE {name} {metric_type}')
+    for labels, value in labels_and_values:
+        labels_normalized = {k: str(v) for k, v in labels.items()}
+        metrics.append(create_metric_line(name, labels_normalized, value))
 
 def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, Any], target: str) -> str:
     """Convert Shelly status and settings to Prometheus metrics format."""
@@ -15,164 +74,275 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
     device_info = extract_device_info(settings)
     
     # Add device info metric with all labels
-    metrics.append('# HELP shelly_device_info Device information')
-    metrics.append('# TYPE shelly_device_info gauge')
-    metrics.append(f'shelly_device_info{{target="{hostname}",type="{device_info["type"]}",mac="{device_info["mac"]}",hostname="{device_info["hostname"]}",firmware="{device_info["firmware"]}"}} 1')
+    create_metric(
+        metrics,
+        'shelly_device_info',
+        'Device information',
+        'gauge',
+        {
+            'target': hostname,
+            'type': device_info['type'],
+            'mac': device_info['mac'],
+            'hostname': device_info['hostname'],
+            'firmware': device_info['firmware']
+        },
+        1
+    )
     
     # Process wifi_sta if available
     if 'wifi_sta' in status:
         wifi = status['wifi_sta']
-        # RSSI metric
-        metrics.append('# HELP shelly_wifi_rssi WiFi RSSI signal strength')
-        metrics.append('# TYPE shelly_wifi_rssi gauge')
-        metrics.append(f'shelly_wifi_rssi{{target="{hostname}"}} {wifi.get("rssi", 0)}')
+        create_metric(
+            metrics,
+            'shelly_wifi_rssi',
+            'WiFi RSSI signal strength',
+            'gauge',
+            {'target': hostname},
+            wifi.get('rssi', 0)
+        )
         
-        # WiFi connection status
-        metrics.append('# HELP shelly_wifi_connected WiFi connection status (0=disconnected, 1=connected)')
-        metrics.append('# TYPE shelly_wifi_connected gauge')
-        metrics.append(f'shelly_wifi_connected{{target="{hostname}",ssid="{wifi.get("ssid", "")}"}} {1 if wifi.get("connected", False) else 0}')
+        create_metric(
+            metrics,
+            'shelly_wifi_connected',
+            'WiFi connection status (0=disconnected, 1=connected)',
+            'gauge',
+            {'target': hostname, 'ssid': wifi.get('ssid', '')},
+            1 if wifi.get('connected', False) else 0
+        )
     
     # Process cloud connection status
     if 'cloud' in status:
         cloud = status['cloud']
-        metrics.append('# HELP shelly_cloud_connected Cloud connection status (0=disconnected, 1=connected)')
-        metrics.append('# TYPE shelly_cloud_connected gauge')
-        metrics.append(f'shelly_cloud_connected{{target="{hostname}"}} {1 if cloud.get("connected", False) else 0}')
+        create_metric(
+            metrics,
+            'shelly_cloud_connected',
+            'Cloud connection status (0=disconnected, 1=connected)',
+            'gauge',
+            {'target': hostname},
+            1 if cloud.get('connected', False) else 0
+        )
         
-        metrics.append('# HELP shelly_cloud_enabled Cloud functionality enabled status (0=disabled, 1=enabled)')
-        metrics.append('# TYPE shelly_cloud_enabled gauge')
-        metrics.append(f'shelly_cloud_enabled{{target="{hostname}"}} {1 if cloud.get("enabled", False) else 0}')
+        create_metric(
+            metrics,
+            'shelly_cloud_enabled',
+            'Cloud functionality enabled status (0=disabled, 1=enabled)',
+            'gauge',
+            {'target': hostname},
+            1 if cloud.get('enabled', False) else 0
+        )
     
     # Process MQTT connection status
     if 'mqtt' in status:
         mqtt = status['mqtt']
-        metrics.append('# HELP shelly_mqtt_connected MQTT connection status (0=disconnected, 1=connected)')
-        metrics.append('# TYPE shelly_mqtt_connected gauge')
-        metrics.append(f'shelly_mqtt_connected{{target="{hostname}"}} {1 if mqtt.get("connected", False) else 0}')
+        create_metric(
+            metrics,
+            'shelly_mqtt_connected',
+            'MQTT connection status (0=disconnected, 1=connected)',
+            'gauge',
+            {'target': hostname},
+            1 if mqtt.get('connected', False) else 0
+        )
     
     # Process update information
     if 'has_update' in status:
-        metrics.append('# HELP shelly_has_update Firmware update availability (0=no update, 1=update available)')
-        metrics.append('# TYPE shelly_has_update gauge')
-        metrics.append(f'shelly_has_update{{target="{hostname}"}} {1 if status["has_update"] else 0}')
+        create_metric(
+            metrics,
+            'shelly_has_update',
+            'Firmware update availability (0=no update, 1=update available)',
+            'gauge',
+            {'target': hostname},
+            1 if status['has_update'] else 0
+        )
     
     if 'update' in status:
         update = status['update']
-        metrics.append('# HELP shelly_update_status Update status information')
-        metrics.append('# TYPE shelly_update_status gauge')
-        metrics.append(f'shelly_update_status{{target="{hostname}",status="{update.get("status", "unknown")}",current_version="{update.get("old_version", "")}",new_version="{update.get("new_version", "")}"}} 1')
+        create_metric(
+            metrics,
+            'shelly_update_status',
+            'Update status information',
+            'gauge',
+            {
+                'target': hostname,
+                'status': update.get('status', 'unknown'),
+                'current_version': update.get('old_version', ''),
+                'new_version': update.get('new_version', '')
+            },
+            1
+        )
     
     # Process RAM metrics
     if 'ram_total' in status and 'ram_free' in status:
-        metrics.append('# HELP shelly_ram_bytes RAM information in bytes')
-        metrics.append('# TYPE shelly_ram_bytes gauge')
-        metrics.append(f'shelly_ram_bytes{{target="{hostname}",type="total"}} {status["ram_total"]}')
-        metrics.append(f'shelly_ram_bytes{{target="{hostname}",type="free"}} {status["ram_free"]}')
-        metrics.append(f'shelly_ram_bytes{{target="{hostname}",type="used"}} {status["ram_total"] - status["ram_free"]}')
+        create_metrics(
+            metrics,
+            'shelly_ram_bytes',
+            'RAM information in bytes',
+            'gauge',
+            [
+                ({'target': hostname, 'type': 'total'}, status['ram_total']),
+                ({'target': hostname, 'type': 'free'}, status['ram_free']),
+                ({'target': hostname, 'type': 'used'}, status['ram_total'] - status['ram_free'])
+            ]
+        )
     
     # Process filesystem metrics
     if 'fs_size' in status and 'fs_free' in status:
-        metrics.append('# HELP shelly_fs_bytes Filesystem information in bytes')
-        metrics.append('# TYPE shelly_fs_bytes gauge')
-        metrics.append(f'shelly_fs_bytes{{target="{hostname}",type="total"}} {status["fs_size"]}')
-        metrics.append(f'shelly_fs_bytes{{target="{hostname}",type="free"}} {status["fs_free"]}')
-        metrics.append(f'shelly_fs_bytes{{target="{hostname}",type="used"}} {status["fs_size"] - status["fs_free"]}')
+        create_metrics(
+            metrics,
+            'shelly_fs_bytes',
+            'Filesystem information in bytes',
+            'gauge',
+            [
+                ({'target': hostname, 'type': 'total'}, status['fs_size']),
+                ({'target': hostname, 'type': 'free'}, status['fs_free']),
+                ({'target': hostname, 'type': 'used'}, status['fs_size'] - status['fs_free'])
+            ]
+        )
     
     # Process temperature if available
     if 'temperature' in status:
         temp_c = status["temperature"]
         temp_k = temp_c + 273.15
         
-        metrics.append('# HELP shelly_temperature_celsius Device temperature in Celsius')
-        metrics.append('# TYPE shelly_temperature_celsius gauge')
-        metrics.append(f'shelly_temperature_celsius{{target="{hostname}"}} {temp_c}')
+        create_metric(
+            metrics,
+            'shelly_temperature_celsius',
+            'Device temperature in Celsius',
+            'gauge',
+            {'target': hostname},
+            temp_c
+        )
         
-        metrics.append('# HELP shelly_temperature_kelvin Device temperature in Kelvin')
-        metrics.append('# TYPE shelly_temperature_kelvin gauge')
-        metrics.append(f'shelly_temperature_kelvin{{target="{hostname}"}} {temp_k}')
+        create_metric(
+            metrics,
+            'shelly_temperature_kelvin',
+            'Device temperature in Kelvin',
+            'gauge',
+            {'target': hostname},
+            temp_k
+        )
     
     # Process uptime
     if 'uptime' in status:
-        metrics.append('# HELP shelly_uptime Device uptime in seconds')
-        metrics.append('# TYPE shelly_uptime counter')
-        metrics.append(f'shelly_uptime{{target="{hostname}"}} {status["uptime"]}')
+        create_metric(
+            metrics,
+            'shelly_uptime',
+            'Device uptime in seconds',
+            'counter',
+            {'target': hostname},
+            status['uptime']
+        )
     
     # Process relays if available
     if 'relays' in status:
-        metrics.append('# HELP shelly_relay_state Relay state (0=off, 1=on)')
-        metrics.append('# TYPE shelly_relay_state gauge')
-        for idx, relay in enumerate(status['relays']):
-            metrics.append(f'shelly_relay_state{{target="{hostname}",relay="{idx}"}} {1 if relay.get("ison", False) else 0}')
+        create_metrics(
+            metrics,
+            'shelly_relay_state',
+            'Relay state (0=off, 1=on)',
+            'gauge',
+            [({'target': hostname, 'relay': str(idx)}, 1 if relay.get('ison', False) else 0)
+             for idx, relay in enumerate(status['relays'])]
+        )
     
     # Process meters if available
     if 'meters' in status:
-        # Power metrics
-        metrics.append('# HELP shelly_power_watts Current power consumption in watts')
-        metrics.append('# TYPE shelly_power_watts gauge')
-        
-        # Energy metrics (raw watt-minutes)
-        metrics.append('# HELP shelly_energy_total_wattminutes Total energy consumption in watt-minutes')
-        metrics.append('# TYPE shelly_energy_total_wattminutes counter')
-        
-        # Energy metrics (calculated watt-hours)
-        metrics.append('# HELP shelly_energy_total_watthours Total energy consumption in watt-hours (calculated from watt-minutes)')
-        metrics.append('# TYPE shelly_energy_total_watthours counter')
-        
-        # Overpower metrics
-        metrics.append('# HELP shelly_overpower_watts Overpower threshold value in watts')
-        metrics.append('# TYPE shelly_overpower_watts gauge')
-        
-        # Counters metrics (last minute energy reports in watt-minutes)
-        metrics.append('# HELP shelly_energy_wattminutes Energy consumption per minute in watt-minutes')
-        metrics.append('# TYPE shelly_energy_wattminutes gauge')
-        
-        # Counters metrics (calculated watt-hours)
-        metrics.append('# HELP shelly_energy_watthours Energy consumption per minute in watt-hours (calculated from watt-minutes)')
-        metrics.append('# TYPE shelly_energy_watthours gauge')
-        
-        # Validity metric
-        metrics.append('# HELP shelly_meter_valid Whether the meter provides valid measurements')
-        metrics.append('# TYPE shelly_meter_valid gauge')
-        
-        # Timestamp metric
-        metrics.append('# HELP shelly_meter_timestamp Unix timestamp of the last meter measurement')
-        metrics.append('# TYPE shelly_meter_timestamp gauge')
-        
+        # Process each meter's metrics
         for idx, meter in enumerate(status['meters']):
             # Basic power and energy metrics
             if 'power' in meter:
-                metrics.append(f'shelly_power_watts{{target="{hostname}",meter="{idx}"}} {meter["power"]}')
+                create_metric(
+                    metrics,
+                    'shelly_power_watts',
+                    'Current power consumption in watts',
+                    'gauge',
+                    {'target': hostname, 'meter': str(idx)},
+                    meter['power']
+                )
+            
             if 'total' in meter:
                 total_wattminutes = meter["total"]
                 total_watthours = total_wattminutes / 60.0
-                metrics.append(f'shelly_energy_total_wattminutes{{target="{hostname}",meter="{idx}"}} {total_wattminutes}')
-                metrics.append(f'shelly_energy_total_watthours{{target="{hostname}",meter="{idx}"}} {total_watthours}')
+                
+                create_metric(
+                    metrics,
+                    'shelly_energy_total_wattminutes',
+                    'Total energy consumption in watt-minutes',
+                    'counter',
+                    {'target': hostname, 'meter': str(idx)},
+                    total_wattminutes
+                )
+                
+                create_metric(
+                    metrics,
+                    'shelly_energy_total_watthours',
+                    'Total energy consumption in watt-hours (calculated from watt-minutes)',
+                    'counter',
+                    {'target': hostname, 'meter': str(idx)},
+                    total_watthours
+                )
             
             # Overpower value if present
             if 'overpower' in meter:
-                metrics.append(f'shelly_overpower_watts{{target="{hostname}",meter="{idx}"}} {meter["overpower"]}')
+                create_metric(
+                    metrics,
+                    'shelly_overpower_watts',
+                    'Overpower threshold value in watts',
+                    'gauge',
+                    {'target': hostname, 'meter': str(idx)},
+                    meter['overpower']
+                )
             
             # Meter validity
             if 'is_valid' in meter:
-                metrics.append(f'shelly_meter_valid{{target="{hostname}",meter="{idx}"}} {1 if meter["is_valid"] else 0}')
+                create_metric(
+                    metrics,
+                    'shelly_meter_valid',
+                    'Whether the meter provides valid measurements',
+                    'gauge',
+                    {'target': hostname, 'meter': str(idx)},
+                    1 if meter['is_valid'] else 0
+                )
             
             # Timestamp if present
             if 'timestamp' in meter:
-                metrics.append(f'shelly_meter_timestamp{{target="{hostname}",meter="{idx}"}} {meter["timestamp"]}')
+                create_metric(
+                    metrics,
+                    'shelly_meter_timestamp',
+                    'Unix timestamp of the last meter measurement',
+                    'gauge',
+                    {'target': hostname, 'meter': str(idx)},
+                    meter['timestamp']
+                )
             
             # Last minute energy counters (in both watt-minutes and calculated watt-hours)
             if 'counters' in meter and isinstance(meter['counters'], list):
-                for minute, value in enumerate(meter['counters']):
-                    wattminutes = value
-                    watthours = wattminutes / 60.0
-                    metrics.append(f'shelly_energy_wattminutes{{target="{hostname}",meter="{idx}",minute="{minute}"}} {wattminutes}')
-                    metrics.append(f'shelly_energy_watthours{{target="{hostname}",meter="{idx}",minute="{minute}"}} {watthours}')
+                create_metrics(
+                    metrics,
+                    'shelly_energy_wattminutes',
+                    'Energy consumption per minute in watt-minutes',
+                    'gauge',
+                    [({'target': hostname, 'meter': str(idx), 'minute': str(minute)}, value)
+                     for minute, value in enumerate(meter['counters'])]
+                )
+                
+                create_metrics(
+                    metrics,
+                    'shelly_energy_watthours',
+                    'Energy consumption per minute in watt-hours (calculated from watt-minutes)',
+                    'gauge',
+                    [({'target': hostname, 'meter': str(idx), 'minute': str(minute)}, value / 60.0)
+                     for minute, value in enumerate(meter['counters'])]
+                )
     
     # Add max power if available
     if 'max_power' in settings:
-        metrics.append('# HELP shelly_max_power_watts Maximum allowed power in watts')
-        metrics.append('# TYPE shelly_max_power_watts gauge')
-        metrics.append(f'shelly_max_power_watts{{target="{hostname}"}} {settings["max_power"]}')
+        create_metric(
+            metrics,
+            'shelly_max_power_watts',
+            'Maximum allowed power in watts',
+            'gauge',
+            {'target': hostname},
+            settings['max_power']
+        )
     
     return '\n'.join(metrics)
 

@@ -10,7 +10,9 @@ services:
       - ${SHELLY_PROMETHEUS_EXPORTER_PORT:-8000}:${SHELLY_PROMETHEUS_EXPORTER_PORT:-8000}
     environment:
       - SHELLY_PROMETHEUS_EXPORTER_PORT=${SHELLY_PROMETHEUS_EXPORTER_PORT:-8000}
-      - PYTHONUNBUFFERED=1
+      - SHELLY_PROMETHEUS_EXPORTER_DEV_RELOAD=True
+    volumes:
+      - ./shelly_prometheus_exporter/:/app/shelly_prometheus_exporter/
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${SHELLY_PROMETHEUS_EXPORTER_PORT:-8000}/health"]
       interval: 30s
