@@ -12,8 +12,9 @@ def extract_device_info(settings: Dict[str, Any]) -> Dict[str, str]:
     """
     device = settings.get('device', {})
     return {
-        'type': device.get('type', 'unknown'),
-        'mac': device.get('mac', 'unknown'),
-        'hostname': device.get('hostname', 'unknown'),
-        'firmware': settings.get('fw', 'unknown')
+        'type': device.get('type', ''),
+        'mac': device.get('mac', ''),
+        'hostname': device.get('hostname', ''),
+        'firmware': settings.get('fw', ''),
+        'name': settings.get('name', '')
     } 

@@ -82,7 +82,8 @@ def convert_to_prometheus_metrics(status: Dict[str, Any], settings: Dict[str, An
             'type': device_info['type'],
             'mac': device_info['mac'],
             'hostname': device_info['hostname'],
-            'firmware': device_info['firmware']
+            'firmware': device_info['firmware'],
+            'name': device_info['name']
         },
         1
     )
